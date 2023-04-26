@@ -1,0 +1,44 @@
+from elasticsearch import Elasticsearch
+import datetime
+import json
+# 创建 Elasticsearch 实例，指定 Elasticsearch 集群节点 IP 和端口
+es = Elasticsearch(['http://127.0.0.1:9200/'],headers={"Content-Type": "application/json"})
+def get_im(itime):
+    #获取当前时间
+    gtime=itime+1
+    ltime=itime
+    gte="now-"+str(gtime)+"m"
+    lt="now-"+str(ltime)+"m"
+    now = datetime.datetime.now()
+    #计算最近24小时时间范围
+    time_range = { "range": { "@timestamp": { "gte": gte, "lt": lt } } }
+    print(time_range)
+
+    # 搜索包含error关键字的数据,默认只返回10条数据，加个size控制返回数
+    search_query = { "size": 1500,"query": { "bool": { "must": [ { "match": { "requestbody": "senderName" } }, time_range ] } } }
+
+    search_result = es.search(index='logstash-nginx*', body=search_query)
+
+    print(len(search_result['hits']['hits']))
+    # 打印搜索结果
+    q_list=[]
+    for hit in search_result['hits']['hits']:
+        log_string = (hit['_source']['requestbody'][6:-1])
+        content_dict = json.loads(log_string)
+
+
+        for i in (content_dict['chat_data']):
+            content=(i['content'])
+            senderName=i['senderName']
+            if "直播" not in senderName:
+                #print(senderName,":",content)
+                q_list.append(senderName+"\":\""+content)
+    #print(q_list)
+    #去重
+    for i in set(q_list):
+            with open("fqadata-elk.txt", "a", encoding="utf-8") as f:
+                f.write(json.dumps(i,ensure_ascii=False) + '\n')
+#循环24次获取24分钟的数据
+for itime in range(1,24):
+    get_im(itime)
+    itime=itime+1
